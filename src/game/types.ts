@@ -6,33 +6,26 @@
  * - バグが減る
  * - Godot移植時にも設計をそのまま使いやすい
  */
-export type CardType = "character" | "effect" | "equipment";
+
+export type CardType = "character" | "effect" | "equip";
 export type PostUse = "discard" | "exhaust";
 export type PostEnemyAttack = "discard" | "exhaust" | "stay";
 export type EffectKind = "battleLong" | "timed1";
 export type Rarity = "N" | "R" | "SR" | "SSR";
 
 export type Effect =
-  | {
-      kind: "battleLong";
-      id: string;
-      value?: number;
-    }
-  | {
-      kind: "timed1";
-      id: string;
-      value?: number;
-    };
+  | { kind: "battleLong"; id: string; value?: number }
+  | { kind: "timed1"; id: string; value?: number };
 
 export type CardDef = {
   id: string;
   name: string;
   type: CardType;
   cost: number;
-  atk: number;
-  def: number;
+  atk?: number;
+  def?: number;
   rarity?: Rarity;
-  effect?: Effect[];
+  effects?: Effect[];
   postUse?: PostUse;
   postEnemyAttack?: PostEnemyAttack;
 };
@@ -44,12 +37,12 @@ export type CardInstance = {
   rolled?: {
     atk?: number;
     def?: number;
-    effect?: Effect[];
+    effects?: Effect[];
     rarity?: Rarity;
   };
 };
 
-export type EnmeyIntent = {
+export type EnemyIntent = {
   /**
    * 各列に対して次ターン何ダメージ飛ぶかを表す。
    * 例: [2, 1, 3, 0]
@@ -57,7 +50,7 @@ export type EnmeyIntent = {
   damageByCol: number[];
 };
 
-export type BattleEffect = {
+export type BattleEffects = {
   battleLong: Effect[];
   timed1: Effect[];
 };
@@ -65,7 +58,7 @@ export type BattleEffect = {
 export type GeneratedRecord = {
   seed: number;
   rarity: Rarity;
-  keywordID: string[];
+  keywordIds: string[];
   card: CardInstance;
 };
 
@@ -80,23 +73,27 @@ export type GameState = {
   hand: CardInstance[];
   discardPile: CardInstance[];
   exhaustPile: CardInstance[];
+
   /**
    * プレイヤー側の4マス
    * null は空きマス
    */
   fieldPlayer: Array<CardInstance | null>;
+
   /**
    * 敵HPを列ごとに持つ
    * 敵がいないなら 0 でもよい
    */
   enemyHp: number[];
 
-  enemyIntent: EnmeyIntent;
+  enemyIntent: EnemyIntent;
   playerHp: number;
-  effects: BattleEffect;
+  effects: BattleEffects;
+
   /**
    * 保管済み生成カード
-   */ collection: GeneratedRecord[];
+   */
+  collection: GeneratedRecord[];
 };
 
 export type KeywordDef = {

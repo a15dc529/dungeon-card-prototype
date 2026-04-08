@@ -5,17 +5,12 @@
   Tailwind をメインで使うが、
   body の背景色などを最初に決めておくと各画面で毎回書かなくて済む。
 */
-
 html,
 body {
-  padding: 0;
-  margin: 0;
   height: 100%;
 }
+
 body {
   background: #f8fafc;
   color: #0f172a;
-}
-* {
-  box-sizing: border-box;
 }

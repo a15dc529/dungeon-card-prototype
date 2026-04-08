@@ -25,7 +25,15 @@ export default function CardBox({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`w-40 rounded-xl border p-3 text-left shadow-sm transition ${selected ? "border-slate-900 ring-2 ring-slate-300" : "border-slate-300"} ${disabled ? "cursor-not-allowed bg-slate-100 text-slate-400" : "bg-white hover:bg-slate-50"}`}
+      className={[
+        "w-40 rounded-xl border p-3 text-left shadow-sm transition",
+        selected
+          ? "border-slate-900 ring-2 ring-slate-300"
+          : "border-slate-300",
+        disabled
+          ? "cursor-not-allowed bg-slate-100 text-slate-400"
+          : "bg-white hover:bg-slate-50",
+      ].join(" ")}
     >
       <div className="mb-2 font-bold">{title}</div>
       <div className="space-y-1 text-sm text-slate-700">

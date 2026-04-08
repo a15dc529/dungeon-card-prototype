@@ -16,7 +16,7 @@ type Props = {
 export default function SectionBox({ title, children }: Props) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      {title && <h2 className="m-4 text-lg font-semibold">{title}</h2>}
+      {title && <h2 className="mb-4 text-lg font-semibold">{title}</h2>}
       {children}
     </section>
   );

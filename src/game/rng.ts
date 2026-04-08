@@ -5,9 +5,9 @@
  * 最初から seed ベースで作っておく。
  */
 
-export function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number) {
   let t = seed >>> 0;
-  return function () {
+  return () => {
     t += 0x6d2b79f5;
     let x = t;
     x = Math.imul(x ^ (x >>> 15), x | 1);
@@ -16,11 +16,7 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-export function randInt(
-  rng: () => number,
-  min: number,
-  maxInclusive: number,
-): number {
+export function randInt(rng: () => number, min: number, maxInclusive: number) {
   return Math.floor(rng() * (maxInclusive - min + 1)) + min;
 }
 

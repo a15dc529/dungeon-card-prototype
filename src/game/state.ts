@@ -1,3 +1,8 @@
+/**
+ * ゲームの初期状態生成と、
+ * プレイヤーターン開始処理・補充処理を担当する。
+ */
+
 import { GameState, CardInstance } from "./types";
 import { COST_MAX, HAND_MAX, COLS } from "./defs";
 import { mulberry32, shuffle } from "./rng";
@@ -8,7 +13,6 @@ let nextInstanceId = 1;
  * CardInstance を作るヘルパー関数。
  * 同じ定義のカードでも instanceId を分けることで個体として扱える。
  */
-
 function makeInstance(defId: string): CardInstance {
   return {
     instanceId: nextInstanceId++,
@@ -19,10 +23,9 @@ function makeInstance(defId: string): CardInstance {
 /**
  * runId や turn から簡易的な seed を作る。
  */
-
 function hashSeed(a: number, b: number, c: number) {
   let x = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791);
-  x >>> 0;
+  x >>>= 0;
   return x;
 }
 
@@ -33,17 +36,14 @@ function hashSeed(a: number, b: number, c: number) {
  * - 山札があれば引く
  * - 山札が0ならそのターンは補充できない
  */
-
 export function refillHandToMax(state: GameState): GameState {
-  if (state.hand.length >= HAND_MAX) {
-    return state;
-  }
-  if (state.drawPile.length === 0) {
-    return state;
-  }
+  if (state.hand.length >= HAND_MAX) return state;
+  if (state.drawPile.length === 0) return state;
+
   const need = HAND_MAX - state.hand.length;
   const drawCards = state.drawPile.slice(0, need);
   const rest = state.drawPile.slice(need);
+
   return {
     ...state,
     hand: [...state.hand, ...drawCards],
@@ -61,20 +61,24 @@ export function refillHandToMax(state: GameState): GameState {
  */
 export function startPlayerTurn(state: GameState): GameState {
   let next = { ...state };
+
   if (next.drawPile.length === 0 && next.discardPile.length > 0) {
     const rng = mulberry32(hashSeed(next.runId, next.turn, 999));
 
     next = {
       ...next,
-      drawPile: shuffle(next.discardPile, rng),
+      drawPile: shuffle([...next.discardPile], rng),
       discardPile: [],
     };
   }
+
   next = {
     ...next,
     cost: next.costMax,
   };
+
   next = refillHandToMax(next);
+
   return next;
 }
 
@@ -86,7 +90,6 @@ export function startPlayerTurn(state: GameState): GameState {
  * - 敵HPは仮固定
  * - enemyIntent も仮固定
  */
-
 export function newRun(seed = Date.now()): GameState {
   const rng = mulberry32(seed);
 

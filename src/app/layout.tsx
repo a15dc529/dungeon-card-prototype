@@ -8,22 +8,22 @@
 
 import type { Metadata } from "next";
 import "./globals.css";
-import HeadNav from "@/components/layout/HeadNav";
+import HeaderNav from "@/components/layout/HeaderNav";
 
 export const metadata: Metadata = {
   title: "Dungeon Card Prototype",
-  description: "外部設計書ベースのロジック確認用プロトタイプ",
+  description: "外部設計ベースのロジック確認用プロトタイプ",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="ja">
       <body className="min-h-screen bg-slate-50 text-slate-900">
-        <HeadNav />
+        <HeaderNav />
         {children}
       </body>
     </html>

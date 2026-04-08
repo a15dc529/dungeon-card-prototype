@@ -35,7 +35,7 @@ export const CARD_DEFS: Record<string, CardDef> = {
     name: "攻撃キャラ",
     type: "character",
     cost: 3,
-    atk: 4,
+    atk: 5,
     def: 0,
     postEnemyAttack: "discard",
   },
@@ -43,23 +43,23 @@ export const CARD_DEFS: Record<string, CardDef> = {
 
 export const KEYWORD_DEFS: KeywordDef[] = [
   {
-    id: "kw_fighter",
-    displayName: "戦士",
-    promptTags: ["fighter armor", "brave warrior"],
+    id: "kw_water",
+    displayName: "水属性",
+    promptTags: ["water magic", "blue aura"],
     gameTags: {
-      role: "fighter",
+      element: "water",
     },
   },
   {
     id: "kw_knight",
     displayName: "騎士",
-    promptTags: ["knight armor", "fanstasy warrior"],
+    promptTags: ["knight armor", "fantasy warrior"],
     gameTags: {
       role: "knight",
     },
   },
   {
-    id: "kw_goth",
+    id: "kw_gothic",
     displayName: "ゴシック",
     promptTags: ["gothic dress", "dark ornament"],
     gameTags: {
@@ -71,7 +71,7 @@ export const KEYWORD_DEFS: KeywordDef[] = [
 export function getDef(id: string): CardDef {
   const found = CARD_DEFS[id];
   if (!found) {
-    throw new Error(`CardDef not found for id: ${id}`);
+    throw new Error(`Unknown card def: ${id}`);
   }
   return found;
 }
