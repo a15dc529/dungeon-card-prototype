@@ -1,4 +1,6 @@
 /**
+ * src/game/rules.ts
+ *
  * ゲームの主要ルール処理。
  *
  * ここに UI 依存を書かず、
@@ -40,6 +42,45 @@ function getDefValue(card: CardInstance): number {
 }
 
 /**
+ * カードを場から退場させる時の共通処理。
+ *
+ * postEnemyAttack の定義に従って、
+ * discard / exhaust / stay を分岐する。
+ *
+ * ※ 今回は「ターン終了時に場から消す」処理でもこの関数を使う。
+ */
+function removeCardFromField(
+  card: CardInstance,
+  discardPile: CardInstance[],
+  exhaustPile: CardInstance[],
+) {
+  const post = getDef(card.defId).postEnemyAttack ?? "discard";
+
+  if (post === "stay") {
+    // stay の場合は場に残るので、呼び出し側で null にしない前提
+    return {
+      discardPile,
+      exhaustPile,
+      shouldStay: true,
+    };
+  }
+
+  if (post === "exhaust") {
+    return {
+      discardPile,
+      exhaustPile: [...exhaustPile, card],
+      shouldStay: false,
+    };
+  }
+
+  return {
+    discardPile: [...discardPile, card],
+    exhaustPile,
+    shouldStay: false,
+  };
+}
+
+/**
  * 手札からキャラカードを指定列に配置する。
  *
  * B案:
@@ -72,21 +113,22 @@ export function placeCharacterFromHand(
   const nextField = next.fieldPlayer.slice();
   const kicked = nextField[col];
 
+  /**
+   * B案の入れ替え処理。
+   * 既にその列にいたカードは場から外す。
+   */
   if (kicked) {
-    const kickedDef = getDef(kicked.defId);
-    const post = kickedDef.postEnemyAttack ?? "discard";
+    const removed = removeCardFromField(
+      kicked,
+      next.discardPile,
+      next.exhaustPile,
+    );
 
-    if (post === "exhaust") {
-      next = {
-        ...next,
-        exhaustPile: [...next.exhaustPile, kicked],
-      };
-    } else {
-      next = {
-        ...next,
-        discardPile: [...next.discardPile, kicked],
-      };
-    }
+    next = {
+      ...next,
+      discardPile: removed.discardPile,
+      exhaustPile: removed.exhaustPile,
+    };
   }
 
   nextField[col] = selectedCard;
@@ -101,21 +143,28 @@ export function placeCharacterFromHand(
 /**
  * ターン終了処理。
  *
- * 流れ:
- * 1. プレイヤー側のキャラが攻撃
- * 2. 敵全滅なら勝利
- * 3. 敵が Intent に従って攻撃
- * 4. 対象列のキャラは基本退場
- * 5. timed1 効果を消す
- * 6. 次ターン開始
+ * 今回の修正版では、以下の順序で処理する。
+ *
+ * 1. プレイヤー攻撃
+ * 2. 敵が全滅していればそこで勝利確定
+ * 3. 生存している敵だけが enemyIntent に従って攻撃
+ * 4. 攻撃対象列のダメージ処理
+ * 5. ターン終了時にプレイヤーフィールド上の残存キャラを全て退場
+ * 6. timed1 効果を消す
+ * 7. 次ターン開始
+ *
+ * これで以下の不具合を直す:
+ * - 倒した敵からダメージを受ける
+ * - ターン終了後にキャラカードが場へ残る
  */
 export function endTurn(state: GameState): GameState {
   let enemyHp = state.enemyHp.slice();
 
   /**
-   * まずプレイヤー攻撃。
-   * 今回は簡易版として「同じ列の敵を攻撃」。
-   * 後で任意ターゲットに拡張できる。
+   * 1. プレイヤー攻撃
+   *
+   * 現段階では簡易仕様として「同じ列の敵を攻撃」。
+   * 後で任意ターゲット攻撃に拡張予定。
    */
   for (let col = 0; col < COLS; col++) {
     const playerCard = state.fieldPlayer[col];
@@ -127,62 +176,126 @@ export function endTurn(state: GameState): GameState {
   }
 
   /**
-   * 敵が全滅したらこの時点で勝利。
-   * 次ターンに進まずそのまま返す。
+   * 2. 敵全滅判定
+   *
+   * プレイヤー攻撃の結果、全敵が0以下ならこの時点で勝利。
+   * この場合、敵攻撃処理へは進まない。
+   *
+   * これにより「倒した敵から攻撃を受ける」バグをまず大きく防ぐ。
    */
   const isVictory = enemyHp.every((hp) => hp <= 0);
   if (isVictory) {
+    /**
+     * さらに今回の仕様では、
+     * 戦闘終了時にもプレイヤーフィールドを片付けておく。
+     * こうしておくと勝利時の見た目や次画面遷移が安定する。
+     */
+    let discardPile = state.discardPile.slice();
+    let exhaustPile = state.exhaustPile.slice();
+    const clearedField = state.fieldPlayer.slice();
+
+    for (let col = 0; col < COLS; col++) {
+      const card = clearedField[col];
+      if (!card) continue;
+
+      const removed = removeCardFromField(card, discardPile, exhaustPile);
+      discardPile = removed.discardPile;
+      exhaustPile = removed.exhaustPile;
+
+      if (!removed.shouldStay) {
+        clearedField[col] = null;
+      }
+    }
+
     return {
       ...state,
       enemyHp,
+      fieldPlayer: clearedField,
+      discardPile,
+      exhaustPile,
     };
   }
 
+  /**
+   * 3. 敵攻撃
+   *
+   * 重要:
+   * 生きている敵だけが攻撃する。
+   *
+   * つまり、プレイヤー攻撃後に enemyHp[col] <= 0 になった敵列は
+   * そのターンの攻撃を行わない。
+   *
+   * これが「倒した敵からダメージを受ける」バグの直接修正。
+   */
   let playerHp = state.playerHp;
   const nextField = state.fieldPlayer.slice();
   let discardPile = state.discardPile.slice();
   let exhaustPile = state.exhaustPile.slice();
 
-  /**
-   * 敵攻撃処理。
-   *
-   * ルール:
-   * - その列にキャラがいれば、防御で軽減
-   * - その列にキャラがいなければダイレクトダメージ
-   * - 攻撃を受けた列のキャラは基本退場
-   */
   for (let col = 0; col < COLS; col++) {
+    /**
+     * その列の敵が既に倒れているなら攻撃しない。
+     */
     if (enemyHp[col] <= 0) continue;
-    // この列の敵がすでに倒れていたら攻撃しない
 
     const damage = state.enemyIntent.damageByCol[col] ?? 0;
-    if (enemyHp[col] <= 0) continue;
+    if (damage <= 0) continue;
 
     const playerCard = nextField[col];
 
     if (playerCard) {
+      /**
+       * キャラがいる列への攻撃。
+       * 防御で軽減し、差分だけプレイヤーが受ける。
+       */
       const defense = getDefValue(playerCard);
       const actualDamage = Math.max(0, damage - defense);
       playerHp -= actualDamage;
 
-      const post = getDef(playerCard.defId).postEnemyAttack ?? "discard";
+      /**
+       * 現在の仕様では、攻撃を受けた列のキャラは基本退場。
+       */
+      const removed = removeCardFromField(playerCard, discardPile, exhaustPile);
+      discardPile = removed.discardPile;
+      exhaustPile = removed.exhaustPile;
 
-      if (post === "stay") {
-        // stay の場合はそのまま盤面に残す
-      } else if (post === "exhaust") {
-        exhaustPile.push(playerCard);
-        nextField[col] = null;
-      } else {
-        discardPile.push(playerCard);
+      if (!removed.shouldStay) {
         nextField[col] = null;
       }
     } else {
+      /**
+       * その列にキャラがいない場合はダイレクトダメージ。
+       */
       playerHp -= damage;
     }
   }
 
   /**
-   * 敵ターン終了時に timed1 効果を消す。
+   * 4. ターン終了時のフィールド掃除
+   *
+   * あなたの確認したい仕様に合わせて、
+   * ターン終了後にフィールドへ残っているキャラを全て退場させる。
+   *
+   * これにより、
+   * - 敵から攻撃されなかった列のキャラが残る
+   * - 敵が死んだ列のキャラが場に残る
+   * というバグを防ぐ。
+   */
+  for (let col = 0; col < COLS; col++) {
+    const card = nextField[col];
+    if (!card) continue;
+
+    const removed = removeCardFromField(card, discardPile, exhaustPile);
+    discardPile = removed.discardPile;
+    exhaustPile = removed.exhaustPile;
+
+    if (!removed.shouldStay) {
+      nextField[col] = null;
+    }
+  }
+
+  /**
+   * 5. 敵ターン終了時に timed1 効果を解除する。
    */
   const nextState: GameState = {
     ...state,
@@ -198,5 +311,12 @@ export function endTurn(state: GameState): GameState {
     },
   };
 
+  /**
+   * 6. 次ターン開始処理
+   *
+   * - 山札0なら次ターン開始時にリロード
+   * - コスト回復
+   * - 手札5まで補充
+   */
   return startPlayerTurn(nextState);
 }

@@ -6,9 +6,12 @@
  * 今回の修正ポイント:
  * - Run開始前で選んだ生成カードを読み込む
  * - newRun() に渡して初期デッキへ追加する
+ * - 勝利時に報酬画面へ進める
+ * - 敗北時に探索へ戻れる
  */
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import ScreenContainer from "@/components/layout/ScreenContainer";
 import StatusPanel from "@/components/battle/StatusPanel";
 import IntentPanel from "@/components/battle/IntentPanel";
@@ -22,17 +25,15 @@ import { loadRunSelectedCard } from "@/lib/storage";
 
 export default function BattlePage() {
   /**
-   * 初期表示時は null にしておき、
-   * useEffect で localStorage から選択カードを読んでから Run を開始する。
-   *
-   * 理由:
-   * - localStorage はクライアントでしか読めない
-   * - そのため初回レンダリング時に直接読むとずれることがある
+   * 戦闘state本体。
+   * localStorage から選択カードを読んでから初期化するため、
+   * 最初は null にしている。
    */
   const [state, setState] = useState<GameState | null>(null);
 
   /**
-   * 現在選択中の手札インデックス
+   * 現在選択中の手札インデックス。
+   * null の場合は未選択。
    */
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(
     null,
@@ -40,18 +41,10 @@ export default function BattlePage() {
 
   useEffect(() => {
     const selectedCard = loadRunSelectedCard();
-
-    /**
-     * Run開始時に選択カードを渡すことで、
-     * 初期デッキ10枚 + 生成カード1枚 の構成になる。
-     */
     const initialState = newRun(Date.now(), selectedCard);
     setState(initialState);
   }, []);
 
-  /**
-   * state がまだ無い間はローディング表示
-   */
   if (!state) {
     return (
       <ScreenContainer
@@ -67,6 +60,17 @@ export default function BattlePage() {
 
   const isVictory = state.enemyHp.every((hp) => hp <= 0);
   const isDefeat = state.playerHp <= 0;
+
+  /**
+   * 現在存在する総カード枚数。
+   * 初期デッキが 10 枚か 11 枚かの確認用。
+   */
+  const totalCardCount =
+    state.drawPile.length +
+    state.hand.length +
+    state.discardPile.length +
+    state.exhaustPile.length +
+    state.fieldPlayer.filter(Boolean).length;
 
   return (
     <ScreenContainer
@@ -135,11 +139,29 @@ export default function BattlePage() {
             >
               戦闘リセット
             </button>
+
+            {isVictory && (
+              <Link
+                href="/reward"
+                className="rounded-lg bg-emerald-700 px-4 py-3 text-white hover:bg-emerald-600"
+              >
+                報酬画面へ進む
+              </Link>
+            )}
+
+            {isDefeat && (
+              <Link
+                href="/dungeon"
+                className="rounded-lg bg-red-700 px-4 py-3 text-white hover:bg-red-600"
+              >
+                探索へ戻る
+              </Link>
+            )}
           </div>
 
           <div className="mt-3 text-sm text-slate-600">
-            {isVictory && "戦闘勝利です。報酬画面に進めます。"}
-            {isDefeat && "敗北しました。Run終了想定です。"}
+            {isVictory && "戦闘勝利です。報酬画面へ進めます。"}
+            {isDefeat && "敗北しました。探索画面へ戻れます。"}
             {!isVictory &&
               !isDefeat &&
               "手札を選択して下段マスをクリックすると配置できます。"}
@@ -158,14 +180,7 @@ export default function BattlePage() {
             現在の山札 + 手札 + 捨て札 + 除外 + 場 の合計を見れば、 初期デッキが
             10枚 か 11枚 か確認できます。
           </div>
-          <div className="mt-2 font-bold">
-            総カード枚数:{" "}
-            {state.drawPile.length +
-              state.hand.length +
-              state.discardPile.length +
-              state.exhaustPile.length +
-              state.fieldPlayer.filter(Boolean).length}
-          </div>
+          <div className="mt-2 font-bold">総カード枚数: {totalCardCount}</div>
         </SectionBox>
       </div>
     </ScreenContainer>
