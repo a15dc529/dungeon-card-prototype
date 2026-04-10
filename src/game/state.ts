@@ -3,7 +3,7 @@
  * プレイヤーターン開始処理・補充処理を担当する。
  */
 
-import { GameState, CardInstance } from "./types";
+import { GameState, CardInstance, GeneratedRecord } from "./types";
 import { COST_MAX, HAND_MAX, COLS } from "./defs";
 import { mulberry32, shuffle } from "./rng";
 
@@ -11,8 +11,11 @@ let nextInstanceId = 1;
 
 /**
  * CardInstance を作るヘルパー関数。
- * 同じ定義のカードでも instanceId を分けることで個体として扱える。
+ *
+ * fixed card 用:
+ * - defId だけを指定して通常カードを作る
  */
+
 function makeInstance(defId: string): CardInstance {
   return {
     instanceId: nextInstanceId++,
@@ -21,8 +24,19 @@ function makeInstance(defId: string): CardInstance {
 }
 
 /**
- * runId や turn から簡易的な seed を作る。
+ * 生成カード用の CardInstance を作る。
+ *
+ * 保管済み GeneratedRecord を、
+ * 今回の Run 用の山札カードへ変換する。
  */
+function makeGeneratedInstance(record: GeneratedRecord): CardInstance {
+  return {
+    instanceId: nextInstanceId++,
+    defId: record.card.defId,
+    seed: record.seed,
+    rolled: record.card.rolled,
+  };
+}
 function hashSeed(a: number, b: number, c: number) {
   let x = (a * 73856093) ^ (b * 19349663) ^ (c * 83492791);
   x >>>= 0;
@@ -85,12 +99,19 @@ export function startPlayerTurn(state: GameState): GameState {
 /**
  * 新しい Run を開始する。
  *
- * この段階では:
- * - 初期デッキ10枚固定
- * - 敵HPは仮固定
- * - enemyIntent も仮固定
+ * 引数:
+ * - seed: 乱数用
+ * - selectedGeneratedCard: Run開始前画面で選ばれた生成カード（あれば）
+ *
+ * 仕様:
+ * - 基本デッキ10枚
+ * - 選択カードがあれば +1枚して 11枚スタート
  */
-export function newRun(seed = Date.now()): GameState {
+
+export function newRun(
+  seed = Date.now(),
+  selectedGeneratedCard: GeneratedRecord | null = null,
+): GameState {
   const rng = mulberry32(seed);
 
   const baseDeck = [
@@ -105,6 +126,14 @@ export function newRun(seed = Date.now()): GameState {
     makeInstance("char_attacker"),
     makeInstance("char_attacker"),
   ];
+
+  /**
+   * Run開始前で選んだ生成カードがある場合、
+   * 初期デッキへ1枚追加する。
+   */
+  if (selectedGeneratedCard) {
+    baseDeck.push(makeGeneratedInstance(selectedGeneratedCard));
+  }
 
   const drawPile = shuffle(baseDeck, rng);
 

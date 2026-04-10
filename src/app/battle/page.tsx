@@ -3,34 +3,67 @@
 /**
  * 戦闘画面。
  *
- * この画面が今回の中心。
- * 外部設計の主要ルールをローカル state で確認する。
+ * 今回の修正ポイント:
+ * - Run開始前で選んだ生成カードを読み込む
+ * - newRun() に渡して初期デッキへ追加する
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ScreenContainer from "@/components/layout/ScreenContainer";
 import StatusPanel from "@/components/battle/StatusPanel";
 import IntentPanel from "@/components/battle/IntentPanel";
 import BattleBoard from "@/components/battle/BattleBoard";
 import HandPanel from "@/components/battle/HandPanel";
 import SectionBox from "@/components/common/SectionBox";
+import { GameState } from "@/game/types";
 import { newRun, refillHandToMax } from "@/game/state";
 import { canRefill, endTurn, placeCharacterFromHand } from "@/game/rules";
+import { loadRunSelectedCard } from "@/lib/storage";
 
 export default function BattlePage() {
   /**
-   * 戦闘用の state。
-   * 画面表示とロジック更新の中心。
+   * 初期表示時は null にしておき、
+   * useEffect で localStorage から選択カードを読んでから Run を開始する。
+   *
+   * 理由:
+   * - localStorage はクライアントでしか読めない
+   * - そのため初回レンダリング時に直接読むとずれることがある
    */
-  const [state, setState] = useState(() => newRun());
+  const [state, setState] = useState<GameState | null>(null);
 
   /**
-   * 手札のどのカードを今選択しているか。
-   * null なら未選択。
+   * 現在選択中の手札インデックス
    */
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(
     null,
   );
+
+  useEffect(() => {
+    const selectedCard = loadRunSelectedCard();
+
+    /**
+     * Run開始時に選択カードを渡すことで、
+     * 初期デッキ10枚 + 生成カード1枚 の構成になる。
+     */
+    const initialState = newRun(Date.now(), selectedCard);
+    setState(initialState);
+  }, []);
+
+  /**
+   * state がまだ無い間はローディング表示
+   */
+  if (!state) {
+    return (
+      <ScreenContainer
+        title="戦闘画面"
+        description="戦闘データを準備しています。"
+      >
+        <div className="rounded-xl border border-slate-200 bg-white p-6">
+          読み込み中...
+        </div>
+      </ScreenContainer>
+    );
+  }
 
   const isVictory = state.enemyHp.every((hp) => hp <= 0);
   const isDefeat = state.playerHp <= 0;
@@ -53,11 +86,26 @@ export default function BattlePage() {
 
         <IntentPanel damageByCol={state.enemyIntent.damageByCol} />
 
+        <BattleBoard
+          enemyHp={state.enemyHp}
+          playerField={state.fieldPlayer}
+          onPlaceToColumn={(col) => {
+            if (selectedHandIndex === null) return;
+            setState((prev) =>
+              prev
+                ? placeCharacterFromHand(prev, selectedHandIndex, col)
+                : prev,
+            );
+            setSelectedHandIndex(null);
+          }}
+        />
         <SectionBox title="操作">
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => setState((prev) => refillHandToMax(prev))}
+              onClick={() =>
+                setState((prev) => (prev ? refillHandToMax(prev) : prev))
+              }
               disabled={!canRefill(state) || isVictory || isDefeat}
               className="rounded-lg bg-slate-900 px-4 py-3 text-white disabled:bg-slate-300"
             >
@@ -68,7 +116,7 @@ export default function BattlePage() {
               type="button"
               onClick={() => {
                 setSelectedHandIndex(null);
-                setState((prev) => endTurn(prev));
+                setState((prev) => (prev ? endTurn(prev) : prev));
               }}
               disabled={isVictory || isDefeat}
               className="rounded-lg bg-blue-700 px-4 py-3 text-white disabled:bg-slate-300"
@@ -79,8 +127,9 @@ export default function BattlePage() {
             <button
               type="button"
               onClick={() => {
+                const selectedCard = loadRunSelectedCard();
                 setSelectedHandIndex(null);
-                setState(newRun());
+                setState(newRun(Date.now(), selectedCard));
               }}
               className="rounded-lg bg-slate-300 px-4 py-3 text-slate-900 hover:bg-slate-200"
             >
@@ -97,24 +146,27 @@ export default function BattlePage() {
           </div>
         </SectionBox>
 
-        <BattleBoard
-          enemyHp={state.enemyHp}
-          playerField={state.fieldPlayer}
-          onPlaceToColumn={(col) => {
-            if (selectedHandIndex === null) return;
-            setState((prev) =>
-              placeCharacterFromHand(prev, selectedHandIndex, col),
-            );
-            setSelectedHandIndex(null);
-          }}
-        />
-
         <HandPanel
           hand={state.hand}
           selectedHandIndex={selectedHandIndex}
           currentCost={state.cost}
           onSelectHand={(index) => setSelectedHandIndex(index)}
         />
+
+        <SectionBox title="今回の初期デッキ確認">
+          <div className="text-sm text-slate-700">
+            現在の山札 + 手札 + 捨て札 + 除外 + 場 の合計を見れば、 初期デッキが
+            10枚 か 11枚 か確認できます。
+          </div>
+          <div className="mt-2 font-bold">
+            総カード枚数:{" "}
+            {state.drawPile.length +
+              state.hand.length +
+              state.discardPile.length +
+              state.exhaustPile.length +
+              state.fieldPlayer.filter(Boolean).length}
+          </div>
+        </SectionBox>
       </div>
     </ScreenContainer>
   );

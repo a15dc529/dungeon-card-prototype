@@ -152,8 +152,11 @@ export function endTurn(state: GameState): GameState {
    * - 攻撃を受けた列のキャラは基本退場
    */
   for (let col = 0; col < COLS; col++) {
+    if (enemyHp[col] <= 0) continue;
+    // この列の敵がすでに倒れていたら攻撃しない
+
     const damage = state.enemyIntent.damageByCol[col] ?? 0;
-    if (damage <= 0) continue;
+    if (enemyHp[col] <= 0) continue;
 
     const playerCard = nextField[col];
 
